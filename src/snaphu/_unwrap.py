@@ -44,6 +44,15 @@ class SnaphuConfig:
     bytemaskfile : path-like or None, optional
         An optional file path of a byte mask file. If None, no mask is applied. Defaults
         to None.
+    ntiles : tuple[int, int], optional
+        The number of (row, column) tiles to break the input interferogram into.
+        Default (1, 1) does not use tiling.
+    tile_overlap : tuple[int, int], optional
+        If tiling, the number of pixels in the (row, column) direction to overlap tiles.
+        Default = (0, 0), no overlap.
+    nproc : int, optional
+        If tiling, number of parallel processes to spawn.
+        Default = 1, which unwraps each tile in serial.
     """
 
     infile: str | os.PathLike[str]
@@ -55,6 +64,9 @@ class SnaphuConfig:
     statcostmode: str
     initmethod: str
     bytemaskfile: str | os.PathLike[str] | None = None
+    ntiles: tuple[int, int] = (1, 1)
+    tile_overlap: tuple[int, int] = (0, 0)
+    nproc: int = 1
 
     def to_string(self) -> str:
         """
@@ -80,6 +92,11 @@ class SnaphuConfig:
             NCORRLOOKS {self.ncorrlooks}
             STATCOSTMODE {self.statcostmode.upper()}
             INITMETHOD {self.initmethod.upper()}
+            NTILEROW {self.ntiles[0]}
+            NTILECOL {self.ntiles[1]}
+            ROWOVRLP {self.tile_overlap[0]}
+            COLOVRLP {self.tile_overlap[1]}
+            NPROC {self.nproc}
         """)
 
         if self.bytemaskfile is not None:
@@ -286,6 +303,9 @@ def unwrap(
     init: str = "mcf",
     *,
     mask: InputDataset | None = None,
+    ntiles: tuple[int, int] = (1, 1),
+    tile_overlap: tuple[int, int] = (0, 0),
+    nproc: int = 1,
     scratchdir: str | os.PathLike[str] | None = None,
     delete_scratch: bool = True,
     unw: OutputDataset | None = None,
@@ -329,6 +349,15 @@ def unwrap(
         pixels that should be masked out. If provided, it must have the same dimensions
         as the input interferogram and boolean or 8-bit integer datatype. Defaults to
         None.
+    ntiles : tuple[int, int], optional
+        The number of (row, column) tiles to break the input interferogram into.
+        Default (1, 1) does not use tiling.
+    tile_overlap : tuple[int, int], optional
+        If tiling, the number of pixels in the (row, column) direction to overlap tiles.
+        Default = (0, 0), no overlap.
+    nproc : int, optional
+        If tiling, number of parallel processes to spawn.
+        Default = 1, which unwraps each tile in serial.
     scratchdir : path-like or None, optional
         Scratch directory where intermediate processing artifacts are written.
         If the specified directory does not exist, it will be created. If None,
@@ -440,6 +469,9 @@ def unwrap(
             statcostmode=cost,
             initmethod=init,
             bytemaskfile=tmp_mask,
+            ntiles=ntiles,
+            tile_overlap=tile_overlap,
+            nproc=nproc,
         )
 
         # Write config parameters to file.
