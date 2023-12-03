@@ -19,7 +19,59 @@ __all__ = [
 
 
 @dataclass(frozen=True)
-class SnaphuConfig:
+class ConfigBase:
+    """Base class for holding SNAPHU configuration parameters."""
+
+    def to_string(self) -> str:
+        raise NotImplementedError()
+
+    def _to_file_textio(self, file_: io.TextIOBase, /) -> None:
+        # Write config params to file.
+        s = self.to_string()
+        count = file_.write(s)
+
+        # Check that the full text was successfully written to the file.
+        if count != len(s):
+            errmsg = "failed to write config params to file"
+            raise RuntimeError(errmsg)
+
+    def _to_file_pathlike(self, file_: str | os.PathLike[str], /) -> None:
+        # Create the file's parent directory(ies) if they didn't already exist.
+        p = Path(file_)
+        p.parent.mkdir(parents=True, exist_ok=True)
+
+        # Write config params to file.
+        s = self.to_string()
+        p.write_text(s)
+
+    def to_file(self, file_: str | os.PathLike[str] | io.TextIOBase, /) -> None:
+        """
+        Write SNAPHU configuration parameters to a file.
+
+        The resulting file is suitable for passing to the SNAPHU executable as a
+        configuration file.
+
+        Parameters
+        ----------
+        file_ : path-like or file-like
+            The output file. May be an open text file or a file path. If the file
+            and any of its parent directories do not exist, they will be created. If the
+            path to an existing file is specified, the file will be overwritten.
+        """
+        if isinstance(file_, io.TextIOBase):
+            self._to_file_textio(file_)
+        elif isinstance(file_, (str, os.PathLike)):
+            self._to_file_pathlike(file_)
+        else:
+            errmsg = (
+                "to_file argument must be a path-like or file-like object, instead got"
+                f" type={type(file_)}"
+            )
+            raise TypeError(errmsg)
+
+
+@dataclass(frozen=True)
+class SnaphuConfig(ConfigBase):
     """
     SNAPHU configuration parameters.
 
@@ -104,49 +156,44 @@ class SnaphuConfig:
 
         return config
 
-    def _to_file_textio(self, file_: io.TextIOBase, /) -> None:
-        # Write config params to file.
-        s = self.to_string()
-        count = file_.write(s)
 
-        # Check that the full text was successfully written to the file.
-        if count != len(s):
-            errmsg = "failed to write config params to file"
-            raise RuntimeError(errmsg)
+@dataclass(frozen=True)
+class SnaphuRegrowConfig(ConfigBase):
+    """
+    SNAPHU configuration parameters.
 
-    def _to_file_pathlike(self, file_: str | os.PathLike[str], /) -> None:
-        # Create the file's parent directory(ies) if they didn't already exist.
-        p = Path(file_)
-        p.parent.mkdir(parents=True, exist_ok=True)
+    Parameters
+    ----------
+    unw_file : path-like
+        The already-unwrapped interferogram file path.
+    """
 
-        # Write config params to file.
-        s = self.to_string()
-        p.write_text(s)
+    unw_file: str | os.PathLike[str]
+    conncompfile: str | os.PathLike[str]
+    linelength: int
+    maxnconncomps: int = 128
 
-    def to_file(self, file_: str | os.PathLike[str] | io.TextIOBase, /) -> None:
+    def to_string(self) -> str:
         """
-        Write SNAPHU configuration parameters to a file.
+        Write SNAPHU configuration parameters to a string.
 
-        The resulting file is suitable for passing to the SNAPHU executable as a
-        configuration file.
+        Creates a multi-line string in SNAPHU configuration file format.
 
-        Parameters
-        ----------
-        file_ : path-like or file-like
-            The output file. May be an open text file or a file path. If the file
-            and any of its parent directories do not exist, they will be created. If the
-            path to an existing file is specified, the file will be overwritten.
+        Returns
+        -------
+        str
+            The output string.
         """
-        if isinstance(file_, io.TextIOBase):
-            self._to_file_textio(file_)
-        elif isinstance(file_, (str, os.PathLike)):
-            self._to_file_pathlike(file_)
-        else:
-            errmsg = (
-                "to_file argument must be a path-like or file-like object, instead got"
-                f" type={type(file_)}"
-            )
-            raise TypeError(errmsg)
+        return textwrap.dedent(f"""\
+            INFILE {os.fspath(self.unw_file)}
+            CONNCOMPFILE {os.fspath(self.conncompfile)}
+            LINELENGTH {self.linelength}
+            REGROWCONNCOMPS TRUE
+            INFILEFORMAT FLOAT_DATA
+            UNWRAPPEDINFILEFORMAT FLOAT_DATA
+            MAXNCOMPS {self.maxnconncomps}
+            CONNCOMPOUTTYPE UINT
+        """)
 
 
 def check_shapes(
@@ -480,6 +527,21 @@ def unwrap(
 
         # Run SNAPHU with the specified parameters.
         run_snaphu(config_file)
+
+        if ntiles != (1, 1):
+            # If tiling, the initial tiled conncomps will be separate and badly numbered
+            # Run again to just regrow the connected components and exit
+            # See comments around "REGROWCONNCOMPS" in snaphu.conf.full
+            regrow_config = SnaphuRegrowConfig(
+                unw_file=tmp_unw,
+                conncompfile=tmp_conncomp,
+                linelength=igram.shape[1],
+            )
+            regrow_config_file = dir_ / "snaphu.conf"
+            regrow_config.to_file(regrow_config_file)
+
+            # Run SNAPHU with the specified parameters.
+            run_snaphu(regrow_config_file)
 
         # Get the output unwrapped phase data.
         tmp_unw_mmap = np.memmap(tmp_unw, dtype=np.float32, shape=unw.shape)
