@@ -97,6 +97,7 @@ class Raster(InputDataset, OutputDataset, AbstractContextManager["Raster"]):
         driver: str | None = None,
         crs: str | Mapping[str, str] | rasterio.crs.CRS | None = None,
         transform: rasterio.transform.Affine | None = None,
+        nodata: str | float | None = None,
         *,
         like: Raster | None = None,
         **kwargs: Any,
@@ -140,6 +141,8 @@ class Raster(InputDataset, OutputDataset, AbstractContextManager["Raster"]):
             with the same metadata (shape, data-type, driver, CRS/geotransform, etc) as
             the reference raster. All other arguments will override the corresponding
             attribute of the reference raster. Defaults to None.
+        nodata : str | float | None, optional
+            Pixel value to represent "no data" in the raster.
         **kwargs : dict, optional
             Additional driver-specific creation options passed to `rasterio.open`.
         """
@@ -158,6 +161,8 @@ class Raster(InputDataset, OutputDataset, AbstractContextManager["Raster"]):
             kwargs["crs"] = crs
         if transform is not None:
             kwargs["transform"] = transform
+        if nodata is not None:
+            kwargs["nodata"] = nodata
 
         # Always create a single-band dataset, even if `like` was part of a multi-band
         # dataset.
