@@ -131,7 +131,8 @@ class SnaphuConfig(ConfigBase):
         str
             The output string.
         """
-        config = textwrap.dedent(f"""\
+        config = textwrap.dedent(
+            f"""\
             INFILE {os.fspath(self.infile)}
             INFILEFORMAT COMPLEX_DATA
             CORRFILE {os.fspath(self.corrfile)}
@@ -149,7 +150,10 @@ class SnaphuConfig(ConfigBase):
             ROWOVRLP {self.tile_overlap[0]}
             COLOVRLP {self.tile_overlap[1]}
             NPROC {self.nproc}
-        """)
+            TILECOSTTHRESH 200
+            MINREGIONSIZE 300
+        """
+        )
 
         if self.bytemaskfile is not None:
             config += f"BYTEMASKFILE {os.fspath(self.bytemaskfile)}\n"
@@ -184,7 +188,8 @@ class SnaphuRegrowConfig(ConfigBase):
         str
             The output string.
         """
-        return textwrap.dedent(f"""\
+        return textwrap.dedent(
+            f"""\
             INFILE {os.fspath(self.unw_file)}
             CONNCOMPFILE {os.fspath(self.conncompfile)}
             LINELENGTH {self.linelength}
@@ -193,7 +198,14 @@ class SnaphuRegrowConfig(ConfigBase):
             UNWRAPPEDINFILEFORMAT FLOAT_DATA
             MAXNCOMPS {self.maxnconncomps}
             CONNCOMPOUTTYPE UINT
-        """)
+            TILECOSTTHRESH 200
+            MINREGIONSIZE 300
+        """
+        )
+        # Note that the defaults for the last two were
+        # TILECOSTTHRESH 500
+        # MINREGIONSIZE 100
+        # But these can fail for large interferograms
 
 
 def check_shapes(
@@ -537,7 +549,7 @@ def unwrap(
                 conncompfile=tmp_conncomp,
                 linelength=igram.shape[1],
             )
-            regrow_config_file = dir_ / "snaphu.conf"
+            regrow_config_file = dir_ / "snaphu_regrow.conf"
             regrow_config.to_file(regrow_config_file)
 
             # Run SNAPHU with the specified parameters.
