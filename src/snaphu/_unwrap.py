@@ -131,8 +131,7 @@ class SnaphuConfig(ConfigBase):
         str
             The output string.
         """
-        config = textwrap.dedent(
-            f"""\
+        config = textwrap.dedent(f"""\
             INFILE {os.fspath(self.infile)}
             INFILEFORMAT COMPLEX_DATA
             CORRFILE {os.fspath(self.corrfile)}
@@ -152,8 +151,7 @@ class SnaphuConfig(ConfigBase):
             NPROC {self.nproc}
             TILECOSTTHRESH 200
             MINREGIONSIZE 300
-        """
-        )
+        """)
 
         if self.bytemaskfile is not None:
             config += f"BYTEMASKFILE {os.fspath(self.bytemaskfile)}\n"
@@ -164,17 +162,33 @@ class SnaphuConfig(ConfigBase):
 @dataclass(frozen=True)
 class SnaphuRegrowConfig(ConfigBase):
     """
-    SNAPHU configuration parameters.
+    SNAPHU configuration parameters for secondary regrowing connected components.
 
     Parameters
     ----------
     unw_file : path-like
         The already-unwrapped interferogram file path.
+    corrfile : path-like
+        The input coherence file path.
+    conncompfile : path-like
+        The output connected component labels file path.
+    linelength : int
+        The line length, in samples, of the input interferogram data array.
+    ncorrlooks : float
+        The equivalent number of independent looks used to form the coherence data.
+    statcostmode : str
+        The statistical cost mode.
+    maxnconncomps: int
+        Maximum number of connected components allowed.
+        Default = 128
     """
 
     unw_file: str | os.PathLike[str]
+    corrfile: str | os.PathLike[str]
     conncompfile: str | os.PathLike[str]
     linelength: int
+    ncorrlooks: float
+    statcostmode: str = "smooth"
     maxnconncomps: int = 128
 
     def to_string(self) -> str:
@@ -188,20 +202,22 @@ class SnaphuRegrowConfig(ConfigBase):
         str
             The output string.
         """
-        return textwrap.dedent(
-            f"""\
+        return textwrap.dedent(f"""\
             INFILE {os.fspath(self.unw_file)}
             CONNCOMPFILE {os.fspath(self.conncompfile)}
             LINELENGTH {self.linelength}
+            CORRFILE {os.fspath(self.corrfile)}
+            NCORRLOOKS {self.ncorrlooks}
+            CORRFILEFORMAT FLOAT_DATA
             REGROWCONNCOMPS TRUE
             INFILEFORMAT FLOAT_DATA
             UNWRAPPEDINFILEFORMAT FLOAT_DATA
             MAXNCOMPS {self.maxnconncomps}
+            STATCOSTMODE {self.statcostmode.upper()}
             CONNCOMPOUTTYPE UINT
             TILECOSTTHRESH 200
             MINREGIONSIZE 300
-        """
-        )
+        """)
         # Note that the defaults for the last two were
         # TILECOSTTHRESH 500
         # MINREGIONSIZE 100
@@ -547,7 +563,10 @@ def unwrap(
             regrow_config = SnaphuRegrowConfig(
                 unw_file=tmp_unw,
                 conncompfile=tmp_conncomp,
+                corrfile=tmp_corr,
                 linelength=igram.shape[1],
+                ncorrlooks=nlooks,
+                statcostmode=cost,
             )
             regrow_config_file = dir_ / "snaphu_regrow.conf"
             regrow_config.to_file(regrow_config_file)
