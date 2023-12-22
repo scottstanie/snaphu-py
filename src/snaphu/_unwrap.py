@@ -181,6 +181,9 @@ class SnaphuRegrowConfig(ConfigBase):
     maxnconncomps: int
         Maximum number of connected components allowed.
         Default = 128
+    bytemaskfile : path-like or None, optional
+        An optional file path of a byte mask file. If None, no mask is applied. Defaults
+        to None.
     """
 
     unw_file: str | os.PathLike[str]
@@ -190,6 +193,7 @@ class SnaphuRegrowConfig(ConfigBase):
     ncorrlooks: float
     statcostmode: str = "smooth"
     maxnconncomps: int = 128
+    bytemaskfile: str | os.PathLike[str] | None = None
 
     def to_string(self) -> str:
         """
@@ -202,7 +206,7 @@ class SnaphuRegrowConfig(ConfigBase):
         str
             The output string.
         """
-        return textwrap.dedent(f"""\
+        config = textwrap.dedent(f"""\
             INFILE {os.fspath(self.unw_file)}
             CONNCOMPFILE {os.fspath(self.conncompfile)}
             LINELENGTH {self.linelength}
@@ -222,6 +226,9 @@ class SnaphuRegrowConfig(ConfigBase):
         # TILECOSTTHRESH 500
         # MINREGIONSIZE 100
         # But these can fail for large interferograms
+        if self.bytemaskfile is not None:
+            config += f"BYTEMASKFILE {os.fspath(self.bytemaskfile)}\n"
+        return config
 
 
 def check_shapes(
