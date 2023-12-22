@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.resources
+import logging
 import os
 import re
 import subprocess
@@ -13,6 +14,9 @@ __all__ = [
     "get_snaphu_version",
     "run_snaphu",
 ]
+
+
+logger = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -70,6 +74,27 @@ def get_snaphu_version() -> str:
     return match.group("version")
 
 
+def logging_call(popenargs: list[str]) -> None:
+    process = subprocess.Popen(
+        popenargs,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+
+    def check_io() -> None:
+        while True:
+            output = process.stdout
+            if output:
+                line = output.readline().decode().strip()
+                logger.info(line)
+            else:
+                break
+
+    # keep checking stdout/stderr until the child exits
+    while process.poll() is None:
+        check_io()
+
+
 def run_snaphu(config_file: str | os.PathLike[str]) -> None:
     """
     Run SNAPHU with the specified config file.
@@ -86,7 +111,7 @@ def run_snaphu(config_file: str | os.PathLike[str]) -> None:
     with get_snaphu_executable() as snaphu:
         args = [os.fspath(snaphu), "-f", os.fspath(config_file)]
         try:
-            subprocess.run(args, stderr=subprocess.PIPE, check=True, text=True)
+            logging_call(args)
         except subprocess.CalledProcessError as e:
             errmsg = e.stderr.strip()
             raise RuntimeError(errmsg) from e
